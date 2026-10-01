@@ -940,7 +940,8 @@ function initApp() {
       svgEl('rect', { class: 'fret-wire', x: x - c.fretWirePx / 2, y: woodTop, width: c.fretWirePx, height: woodBottom - woodTop }, g);
     }
     // ポジションマーク（実物と同じ位置: 単発は3〜4弦の間、12フレットは1〜2弦と5〜6弦の間）
-    const pearl = (x, y) => { if (y > woodTop && y < woodBottom) svgEl('circle', { class: 'inlay', cx: x, cy: y, r: c.inlayRadiusPx }, g); };
+    // フレット番号の帯にかかるものは描かない（番号の下から半分のぞいてしまう）
+    const pearl = (x, y) => { if (y > woodTop && y < woodBottom && y + c.inlayRadiusPx < geo.h - c.fretStripPx) svgEl('circle', { class: 'inlay', cx: x, cy: y, r: c.inlayRadiusPx }, g); };
     for (const n of c.frets) {
       const x = fretX(n);
       if (x < 0 || x > geo.w) continue;
