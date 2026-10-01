@@ -1,10 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#222222"/>
-  <circle cx="22" cy="22" r="8" fill="#d9534f"/>
-  <circle cx="42" cy="32" r="8" fill="#3a9b5d"/>
-  <circle cx="26" cy="46" r="8" fill="#4a8fd8"/>
-  <path d="M14 12h36M14 32h36M14 52h36M18 8v48M34 8v48M50 8v48" stroke="#f4f4f4" stroke-width="3" stroke-linecap="round" opacity=".72"/>
-  <text x="22" y="27" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="800" fill="#ffffff">R</text>
-  <text x="42" y="37" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="800" fill="#ffffff">3</text>
-  <text x="26" y="51" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="800" fill="#ffffff">5</text>
+  <!-- ピタ止めチョーキング: 「ピ」。半濁点は、弦を押さえる指の印（白い丸） -->
+  <rect width="64" height="64" rx="14" fill="#3ddc84"/>
+  <g fill="none" stroke="#0f1115" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 16V40Q16 48 24 48H46" stroke-width="8"/>
+    <path d="M16 37L31 32.5" stroke-width="8"/>
+    <circle cx="46" cy="17" r="6" stroke-width="4.5" fill="#ffffff"/>
+  </g>
 </svg>
