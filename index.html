@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>ピタ止めチョーキング</title>
+<meta name="description" content="ギターがなくてもチョーキングの音程を練習できる。画面の弦を押し上げて、目標の高さで止められたかを判定します。">
+<link rel="icon" href="./favicon.svg">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1e26;
+    --panel2: #242a36;
+    --line: #2c323e;
+    --text: #e8eaf0;
+    --dim: #9aa3b2;
+    --accent: #4cc2ff;
+    --accent-ink: #06202e;
+    --ok: #3ddc84;
+    --warn: #ffd23f;
+    --over: #ff6b6b;
+    --band: rgba(76, 194, 255, 0.22);
+    --wood: #2a1a10;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+
+  button, select { font-family: inherit; color: inherit; }
+  button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .tnum { font-variant-numeric: tabular-nums; }
+  [hidden] { display: none !important; }
+
+  /* ===== shell ===== */
+  #app {
+    --gutter: 14px;              /* 盤・読み取り・操作部の左右の余白（狭い画面では小さくする） */
+    height: 100vh;
+    height: 100dvh;
+    max-width: 520px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    row-gap: 6px;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) calc(8px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  }
+  header, #readout, #historyRow, .controls { margin: 0 var(--gutter); }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+  }
+  h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #helpBtn {
+    flex: none;
+    white-space: nowrap;
+    min-width: 44px;
+    height: 44px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* ===== 読み取り表示。文字が変わっても高さが変わらないよう、すべて固定の高さ ===== */
+  #readout {
+    padding: 6px 12px 4px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+  #readout > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #noteLine { height: 20px; line-height: 20px; font-size: 13px; color: var(--dim); }
+  #liveRow {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #cents {
+    width: 104px;
+    font-size: 32px;
+    line-height: 42px;
+    font-weight: 700;
+    text-align: right;
+    flex: none;
+  }
+  #cents.small { font-size: 18px; color: var(--dim); }
+  #liveWord { flex: 0 1 7em; min-width: 0; overflow: hidden; font-size: 15px; line-height: 42px; font-weight: 700; color: var(--dim); }
+  #liveWord[data-kind="under"] { color: var(--accent); }
+  #liveWord[data-kind="ok"] { color: var(--ok); }
+  #liveWord[data-kind="over"] { color: var(--over); }
+  #badge {
+    margin-left: auto;
+    flex: none;
+    min-width: 3.2em;
+    height: 36px;
+    line-height: 36px;
+    padding: 0 8px;
+    border-radius: 10px;
+    font-size: 22px;
+    font-weight: 800;
+    text-align: center;
+    color: var(--dim);
+    transition: background .25s, color .25s;
+  }
+  #badge:empty { visibility: hidden; }
+  #badge[data-kind="ok"] { color: var(--ok); }
+  #badge[data-kind="shallow"] { color: var(--warn); }
+  #badge[data-kind="over"] { color: var(--over); }
+  #badge.fresh { background: var(--panel2); box-shadow: inset 0 0 0 2px currentColor; }
+
+  #meter { height: 30px; position: relative; overflow: visible; }
+  #meter.off > * { visibility: hidden; }
+  #meterTrack {
+    position: absolute;
+    left: 0; right: 0; top: 2px;
+    height: 12px;
+    border-radius: 6px;
+    background: var(--panel2);
+    overflow: hidden;
+  }
+  /* 棒は帯より細くして、目標の帯が棒の上下に見えるようにする */
+  #meterBar { position: absolute; left: 0; top: 3px; bottom: 3px; width: 0; background: var(--accent); border-radius: 0 3px 3px 0; }
+  #meterBar.in-band { background: var(--ok); }
+  #meterBand {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: var(--band);
+    border-left: 1px solid var(--accent);
+    border-right: 1px solid var(--accent);
+  }
+  #meterTicks { position: absolute; left: 0; right: 0; top: 16px; height: 14px; }
+  /* 目盛りの外まで上がった時の印 */
+  #meterBeyond {
+    position: absolute;
+    right: 2px; top: 2px;
+    height: 12px;
+    line-height: 12px;
+    font-size: 10px;
+    color: var(--text);
+    visibility: hidden;
+  }
+  #meter.beyond:not(.off) #meterBeyond { visibility: visible; }
+  .tick {
+    position: absolute;
+    transform: translateX(-50%);
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--dim);
+  }
+  .tick:first-child { transform: none; }
+
+  #resultLine { height: 22px; line-height: 22px; font-size: 14px; font-weight: 700; color: var(--dim); }
+  #resultLine[data-kind="ok"] { color: var(--ok); }
+  #resultLine[data-kind="shallow"] { color: var(--warn); }
+  #resultLine[data-kind="over"] { color: var(--over); }
+  /* 補足は最大3行ぶん。長さが変わっても高さは変えない */
+  #readout > #reviewLine {
+    height: 30px;
+    line-height: 15px;
+    font-size: 11px;
+    color: var(--dim);
+    white-space: normal;
+    text-overflow: clip;
+  }
+
+  /* ===== 盤: 実物と同じ比率のクローズアップ。木・金属・弦の質感はすべて SVG の中で作る ===== */
+  #board {
+    display: block;
+    width: calc(100% - 2 * var(--gutter));
+    height: 100%;
+    min-height: 0;
+    margin: 0 var(--gutter);
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    background: var(--wood);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  #board * { pointer-events: none; }
+  #board #hit, #board #miss { pointer-events: all; touch-action: none; fill: transparent; }
+  #hit { cursor: ns-resize; }
+  #board:focus-visible { outline-offset: -3px; }
+  .wood { fill: url(#woodFace); }
+  .wood-figure { fill: url(#woodFigure); }
+  .neck-side { fill: url(#neckSide); }
+  .binding { fill: #d9cdb4; }
+  .head { fill: #17100a; }
+  .nut { fill: #e6dcc4; stroke: rgba(0, 0, 0, 0.45); stroke-width: 1; }
+  .body { fill: #120d09; }
+  .fret-groove { fill: rgba(0, 0, 0, 0.45); }
+  .fret-wire { fill: url(#fretMetal); }
+  .inlay { fill: url(#pearl); stroke: rgba(0, 0, 0, 0.35); stroke-width: 1; }
+  .fret-strip { fill: rgba(8, 6, 4, 0.55); }
+  .fret-num { fill: #b8ac98; text-anchor: middle; dominant-baseline: central; font-variant-numeric: tabular-nums; }
+  .fret-num.on { fill: #fff; font-weight: 700; }
+  .string { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+  .string.shadow { stroke: rgba(0, 0, 0, 0.55); }
+  .string.plain { stroke: #c9ccd2; }
+  .string.wound { stroke: #9a9488; }
+  .string.active { stroke: #f4f5f7; }
+  .string.highlight { stroke: rgba(255, 255, 255, 0.55); }
+  .string.glow { stroke: rgba(255, 255, 255, 0.12); }
+  .string-label { fill: rgba(232, 234, 240, 0.55); letter-spacing: 0.04em; paint-order: stroke; stroke: var(--wood); stroke-width: 4px; stroke-linejoin: round; }
+  .string-label.on { fill: var(--text); font-weight: 700; }
+  .rest-line { stroke: rgba(255, 255, 255, 0.35); stroke-dasharray: 3 5; }
+  .dot { fill: var(--accent); stroke: rgba(0, 0, 0, 0.35); stroke-width: 1.5; }
+  .dot.in-band { fill: var(--ok); stroke: var(--text); stroke-width: 3; }
+  .dot-halo { fill: var(--accent); opacity: 0.22; }
+  .dot-halo.in-band { fill: var(--ok); }
+  .press-glow { fill: url(#pressGlow); }
+  .press-ring { fill: none; stroke: var(--accent); stroke-width: 2.5; opacity: 0.9; }
+  .press-core { fill: var(--accent); }
+  /* 案内の文字は、弦やフレットに重なっても読めるよう縁取りする */
+  .board-hint { fill: var(--text); text-anchor: middle; font-weight: 600; paint-order: stroke; stroke: var(--wood); stroke-width: 7px; stroke-linejoin: round; }
+  .stop-accent { stop-color: var(--accent); }
+
+  /* ===== 履歴 ===== */
+  #historyRow { height: 38px; overflow: hidden; }
+  #history { display: flex; gap: 5px; height: 20px; align-items: center; }
+  .hist { width: 13px; height: 13px; display: block; }
+  .hist.empty path { fill: var(--panel2); }
+  .hist.ok path { fill: var(--ok); }
+  .hist.shallow path { fill: var(--warn); }
+  .hist.over path { fill: var(--over); }
+  #summary { height: 18px; line-height: 18px; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ===== コントロール ===== */
+  .controls { display: grid; row-gap: 8px; }
+  .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .seg {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .seg button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: var(--panel2);
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible { outline-offset: -3px; }
+  /* 選択中のボタンは背景が明るいので、枠は濃い色にする */
+  .seg button[aria-pressed="true"]:focus-visible { outline-color: var(--accent-ink); }
+  /* 選択中は色に加えて ✓ でも示す。幅が変わらないよう、非選択でも場所は取る */
+  .check { display: inline-block; width: 1em; visibility: hidden; }
+  .seg button[aria-pressed="true"] .check { visibility: visible; }
+  select, .act {
+    min-height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  select { padding: 0 4px; flex: 0 1 auto; min-width: 0; }
+  .act { padding: 0 10px; flex: 1 1 0; white-space: nowrap; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ===== 開始・使い方 ===== */
+  .sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(15, 17, 21, 0.86);
+    overflow-y: auto;
+  }
+  .card {
+    width: min(100%, 380px);
+    padding: 22px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .card h2 { font-size: 19px; margin-bottom: 12px; text-align: center; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .card-head h2 { margin-bottom: 0; }
+  .close-top {
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .card h3 { font-size: 13px; margin: 14px 0 4px; color: var(--accent); }
+  .card ul { list-style: none; font-size: 13px; line-height: 1.8; color: var(--dim); }
+  .card li b { color: var(--text); font-weight: 600; }
+  .card p { font-size: 12px; line-height: 1.7; color: var(--dim); }
+  .primary {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 14px;
+    border-radius: 12px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 16px;
+    font-weight: 700;
+  }
+  #startMsg { margin-top: 10px; }
+
+  #debug, #selftest {
+    position: fixed;
+    left: 8px;
+    z-index: 5;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.78);
+    color: var(--ok);
+    font: 11px/1.5 ui-monospace, Menlo, monospace;
+    white-space: pre-wrap;
+  }
+  #debug { top: 48px; pointer-events: none; }
+  #selftest { top: 8px; right: 8px; bottom: 8px; overflow: auto; z-index: 20; font-size: 12px; }
+
+  @media (max-width: 360px) {
+    #app { --gutter: 8px; }
+    .seg button, select, .act { font-size: 12px; padding: 0 4px; }
+    #cents { font-size: 28px; width: 92px; }
+    #readout > #reviewLine { height: 45px; }
+    #resultLine { font-size: 13px; }
+  }
+  @media (max-width: 340px) {
+    .row { gap: 5px; }
+    .seg button, select, .act { font-size: 11px; padding: 0 2px; }
+    .check { width: 0.85em; }
+    #liveWord { font-size: 14px; }
+  }
+  /* 横向き・背の低い画面: 左に表示と操作、右に盤 */
+  @media (max-height: 560px) and (min-width: 520px) {
+    #app {
+      max-width: 960px;
+      grid-template-columns: minmax(250px, 340px) minmax(0, 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      column-gap: 8px;
+    }
+    header { grid-column: 1; grid-row: 1; }
+    #readout { grid-column: 1; grid-row: 2; }
+    #historyRow { grid-column: 1; grid-row: 3; align-self: start; }
+    .controls { grid-column: 1; grid-row: 4; }
+    #board { grid-column: 2; grid-row: 1 / -1; }
+    #readout > #reviewLine { height: 45px; }
+    #resultLine { font-size: 13px; }
+    .seg button, select, .act { font-size: 12px; padding: 0 3px; }
+  }
+  /* 2列でも左の列が収まらないほど低い画面: ページを縦に送れるようにする */
+  @media (max-height: 377.98px) and (min-width: 520px) {
+    html { height: auto; overflow-y: auto; }
+    body { height: auto; overflow: visible; }
+    #app { height: 378px; }
+  }
+  /* 背が低く、2列にする幅もない画面（拡大表示・画面分割）: 盤の高さを確保して、ページを縦に送れるようにする */
+  @media (max-height: 520px) and (max-width: 519.98px) {
+    html { height: auto; overflow-y: auto; }
+    body { height: auto; overflow: visible; }
+    #app { height: 540px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>ピタ止めチョーキング</h1>
+    <button type="button" id="helpBtn" aria-haspopup="dialog">？ 使い方</button>
+  </header>
+
+  <section id="readout" aria-label="読み取り">
+    <div id="noteLine"></div>
+    <div id="liveRow">
+      <span id="cents" class="tnum">—</span>
+      <span id="liveWord"></span>
+      <span id="badge" aria-hidden="true"></span>
+    </div>
+    <div id="meter" aria-hidden="true">
+      <div id="meterTrack"><div id="meterBand"></div><div id="meterBar"></div></div>
+      <div id="meterBeyond">▶</div>
+      <div id="meterTicks"></div>
+    </div>
+    <div id="resultLine" role="status" aria-live="polite"></div>
+    <div id="reviewLine" class="tnum"></div>
+  </section>
+
+  <svg id="board" tabindex="0" role="application">
+    <defs>
+      <!-- 指板の木: 上下でわずかに明るさを変え、上に薄い杢（もく）を重ねる -->
+      <linearGradient id="woodFace" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#26170e"/><stop offset="0.45" stop-color="#3b2415"/><stop offset="0.7" stop-color="#34200f"/><stop offset="1" stop-color="#22140b"/>
+      </linearGradient>
+      <linearGradient id="woodFigure" x1="0" y1="0" x2="1" y2="0.18">
+        <stop offset="0" stop-color="#000" stop-opacity="0.18"/><stop offset="0.22" stop-color="#fff" stop-opacity="0.05"/><stop offset="0.38" stop-color="#000" stop-opacity="0.14"/><stop offset="0.55" stop-color="#fff" stop-opacity="0.04"/><stop offset="0.72" stop-color="#000" stop-opacity="0.16"/><stop offset="0.88" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/>
+      </linearGradient>
+      <linearGradient id="neckSide" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#120b06"/><stop offset="1" stop-color="#1c110a"/>
+      </linearGradient>
+      <!-- ニッケルのフレット: 左が光り、右に影 -->
+      <linearGradient id="fretMetal" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#6b6f76"/><stop offset="0.3" stop-color="#eef0f3"/><stop offset="0.55" stop-color="#b5bac2"/><stop offset="1" stop-color="#4f535a"/>
+      </linearGradient>
+      <radialGradient id="pearl" cx="0.38" cy="0.32" r="0.75">
+        <stop offset="0" stop-color="#fffaf0"/><stop offset="0.55" stop-color="#d6cfc0"/><stop offset="1" stop-color="#8f877a"/>
+      </radialGradient>
+      <radialGradient id="pressGlow">
+        <stop class="stop-accent" offset="0" stop-opacity="0.35"/><stop class="stop-accent" offset="1" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <g id="boardStatic" aria-hidden="true"></g>
+    <g id="boardLive" aria-hidden="true"></g>
+    <g id="boardTop" aria-hidden="true"></g>
+    <rect id="miss" x="0" y="0" width="0" height="0"/>
+    <rect id="hit" x="0" y="0" width="0" height="0"/>
+  </svg>
+
+  <div id="historyRow">
+    <div id="history" role="img" aria-label="判定の履歴"></div>
+    <div id="summary" class="tnum"></div>
+  </div>
+
+  <div class="controls">
+    <div class="row">
+      <div class="seg" id="targetSeg" role="group" aria-label="目標"></div>
+      <div class="seg" id="modeSeg" role="group" aria-label="表示"></div>
+    </div>
+    <div class="row">
+      <label class="sr-only" for="stringSel">弦</label>
+      <select id="stringSel"></select>
+      <label class="sr-only" for="fretSel">フレット</label>
+      <select id="fretSel"></select>
+      <button type="button" class="act" id="refBtn" aria-label="お手本を鳴らす（もとの音、目標の音の順）">♪ お手本</button>
+    </div>
+  </div>
+</div>
+
+<div id="startOverlay" class="sheet" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+  <div class="card">
+    <h2 id="startTitle">ピタ止めチョーキング</h2>
+    <ul>
+      <li><b>弦を押さえて、上へずらす</b>（<span data-fill="downStrings">4・5・6</span>弦は下へ）</li>
+      <li><b>目標の高さで止める</b></li>
+      <li><b>♪ お手本</b> … もとの音 → 目標の音</li>
+    </ul>
+    <button type="button" class="primary" id="startBtn" autofocus>タップしてはじめる</button>
+    <p id="startMsg">音が出ます。無線イヤホンは音が遅れるので、有線かスピーカーで。</p>
+  </div>
+</div>
+
+<div id="help" class="sheet" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
+  <div class="card">
+    <div class="card-head">
+      <h2 id="helpTitle" tabindex="-1">使い方</h2>
+      <button type="button" class="close-top" id="helpCloseTop">× とじる</button>
+    </div>
+    <h3>やること</h3>
+    <p>◎ を押さえて上へずらす（<span data-fill="downStrings">4・5・6</span>弦は下へ）。目標の高さで止めて、指を離す。</p>
+    <p>¢ は音程の単位。半音 = 100¢。</p>
+    <h3>判定</h3>
+    <p>目標 ±<span data-fill="tolerance">20</span>¢ に <span data-fill="holdS">0.2</span> 秒 → ◯<br>+<span data-fill="tolerance">20</span>¢ より上に <span data-fill="overS">0.15</span> 秒 → 高い<br>◯ にならずに離す → 低い（上に行きすぎていたら 高い）</p>
+    <p>数値は「チョーキングチェッカー」と同じです。</p>
+    <h3>耳だけ</h3>
+    <p>押さえている間は何も出ません。離す直前 <span data-fill="heldS">0.2</span> 秒の高さで判定します。慣れたらこちらで。</p>
+    <h3>キーボード</h3>
+    <p>Space で押さえる、↑ ↓ でずらす。</p>
+    <button type="button" class="primary" id="helpClose">とじる</button>
+  </div>
+</div>
+
+<pre id="debug" hidden></pre>
+<pre id="selftest" hidden></pre>
+
+<script src="./app.js" defer></script>
+</body>
+</html>
